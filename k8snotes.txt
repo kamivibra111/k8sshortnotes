@@ -1,0 +1,857 @@
+to create standalone pod cluster in kubernetes
+
+kind create cluster --config clusterfilename.
+the file structure would look something like this>>>
+
+# three node (two workers) cluster config
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+_____________________________________________
+DEPLOYMENT is
+creating replica set for High Availability and zero down time upgrade. (for the same above pod cluster)
+
+                     (file name) (image from any repo)          (run on client as output yaml format)
+ Command: kubectl create deploy mydeploy --image=kamivibra/cognixia14:1.0 --dry-run=client -o yaml > deploy.yaml
+(deploy.yaml file format) 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: mydeploy
+  name: mydeploy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mydeploy
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: mydeploy
+    spec:
+      containers:
+      - image: kamivibra/cognixia14:1.0
+        name: cognixia14
+        resources: {}
+status: {}
+------------------------------------------------
+this will create a replica and deploy our containers. to check replica>>> kubectl get all 
+output command
+
+NAME                            READY   STATUS    RESTARTS   AGE
+pod/mydeploy-597469f67d-c92d7   1/1     Running   0          15m
+pod/mydeploy-597469f67d-qf4p8   1/1     Running   0          17m
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   23h
+
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/mydeploy   2/2     2            2           34m
+
+NAME                                  DESIRED   CURRENT   READY   AGE
+replicaset.apps/mydeploy-597469f67d   2         2         2       34m
+
+ or kubectl get all -o wide
+
+NAME                            READY   STATUS    RESTARTS   AGE   IP           NODE           NOMINATED NODE   READINESS GATES
+pod/mydeploy-597469f67d-c92d7   1/1     Running   0          16m   10.244.2.5   kind-worker2   <none>           <none>
+pod/mydeploy-597469f67d-qf4p8   1/1     Running   0          18m   10.244.1.4   kind-worker    <none>           <none>
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE   SELECTOR
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   23h   <none>
+
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS   IMAGES                     SELECTOR
+deployment.apps/mydeploy   2/2     2            2           35m   cognixia14   kamivibra/cognixia14:1.0   app=mydeploy
+
+NAME                                  DESIRED   CURRENT   READY   AGE   CONTAINERS   IMAGES                     SELECTOR
+replicaset.apps/mydeploy-597469f67d   2         2         2       35m   cognixia14   kamivibra/cognixia14:1.0   app=mydeploy,pod-template-hash=597469f67d
+   
+now try deleting a pod, kubectl delete po mydeploy-597469f67d-c92d7 (it will delete pod but the replica will automatically deploy another pod to fulfil the desired state.
+
+SCALING.....
+kubectl scale deploy mydeploy --replicas=10
+the above command will deploye 10 pods for scaling purposes or high request on website.
+check status now with command kubectl get all
+NAME                            READY   STATUS              RESTARTS   AGE
+pod/mydeploy-597469f67d-2kdxc   0/1     Pending             0          1s
+pod/mydeploy-597469f67d-btt7p   0/1     Pending             0          1s
+pod/mydeploy-597469f67d-fl57h   0/1     ContainerCreating   0          1s
+pod/mydeploy-597469f67d-jz7p6   0/1     ContainerCreating   0          1s
+pod/mydeploy-597469f67d-kp9fq   0/1     Pending             0          1s
+pod/mydeploy-597469f67d-qf4p8   1/1     Running             0          41m
+pod/mydeploy-597469f67d-rzqhm   0/1     Pending             0          1s
+pod/mydeploy-597469f67d-t9hgq   0/1     Pending             0          1s
+pod/mydeploy-597469f67d-x992b   0/1     Pending             0          1s
+pod/mydeploy-597469f67d-zw6x9   1/1     Running             0          7m24s
+
+creating pods, after few seconds run again the command "kubectl get all" and status will be running and ready
+
+NAME                            READY   STATUS    RESTARTS   AGE
+pod/mydeploy-597469f67d-2kdxc   1/1     Running   0          7s
+pod/mydeploy-597469f67d-btt7p   1/1     Running   0          7s
+pod/mydeploy-597469f67d-fl57h   1/1     Running   0          7s
+pod/mydeploy-597469f67d-jz7p6   1/1     Running   0          7s
+pod/mydeploy-597469f67d-kp9fq   1/1     Running   0          7s
+pod/mydeploy-597469f67d-qf4p8   1/1     Running   0          42m
+pod/mydeploy-597469f67d-rzqhm   1/1     Running   0          7s
+pod/mydeploy-597469f67d-t9hgq   1/1     Running   0          7s
+pod/mydeploy-597469f67d-x992b   1/1     Running   0          7s
+pod/mydeploy-597469f67d-zw6x9   1/1     Running   0          7m30s
+
+NOW to rescale it back to 2 or required pods, use command "kubectl scale deploy mydeploy --replicas=2 and then use "kubectl get all" command to check the status.
+
+NAME                            READY   STATUS        RESTARTS   AGE
+pod/mydeploy-597469f67d-2kdxc   1/1     Terminating   0          6m9s
+pod/mydeploy-597469f67d-btt7p   1/1     Terminating   0          6m9s
+pod/mydeploy-597469f67d-fl57h   1/1     Terminating   0          6m9s
+pod/mydeploy-597469f67d-jz7p6   1/1     Terminating   0          6m9s
+pod/mydeploy-597469f67d-kp9fq   1/1     Terminating   0          6m9s
+pod/mydeploy-597469f67d-qf4p8   1/1     Running       0          48m
+pod/mydeploy-597469f67d-rzqhm   1/1     Terminating   0          6m9s
+pod/mydeploy-597469f67d-t9hgq   1/1     Terminating   0          6m9s
+pod/mydeploy-597469f67d-x992b   1/1     Terminating   0          6m9s
+pod/mydeploy-597469f67d-zw6x9   1/1     Running       0          13m
+
+AND after few seconds you will be left with 2 pods
+#~ kubectl get all
+NAME                            READY   STATUS    RESTARTS   AGE
+pod/mydeploy-597469f67d-qf4p8   1/1     Running   0          52m
+pod/mydeploy-597469f67d-zw6x9   1/1     Running   0          17m
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   24h
+
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/mydeploy   2/2     2            2           68m
+
+NAME                                  DESIRED   CURRENT   READY   AGE
+replicaset.apps/mydeploy-597469f67d   2         2         2       68m
+
+NOW For Autoscale we use Horizental Pod Autoscaling or HPA command>>
+kubctl autoscale deploy mydeploy --cpu-percent=80 --min=2 --max=5  (K8S provides autoscaling accordance with CPU usage only for now)
+
+to delete autoscale, >>> kubectl delete hpa mydeploy
+
+Now to describe a POD information >>> kubectl describe pod/mydeploy-597469f67d-qf4p8 (POD name from above) will give you all information regarding running pod(s)
+
+NOW FOR 0 down time upgrade, to pull another updated image, use following command.
+kubctl set image deploy mydeploy cognixia14=kamivibra/cognixia13:1.0 --record (this command will remove old image "cognixia14" with its replicas set and pull and deploy
+a new image which is "cognixia13:1.0" from Docker Repository "kamivibra". Moreover, it will save the old replicas set just in case in future you want to revert back to old
+version of image. check the deployment by kubectl get all >>>>
+
+ kubectl get all
+NAME                            READY   STATUS    RESTARTS   AGE
+pod/mydeploy-6b4586d4bc-qd852   1/1     Running   0          4m18s
+pod/mydeploy-6b4586d4bc-qlp5m   1/1     Running   0          3m52s
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   2d7h
+
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/mydeploy   2/2     2            2           32h
+
+NAME                                  DESIRED   CURRENT   READY   AGE
+replicaset.apps/mydeploy-597469f67d   0         0         0       32h   (PREVIOUS replica set containing old image version)
+replicaset.apps/mydeploy-6b4586d4bc   2         2         2       4m18s  (New replica set created with new image)
+>>>kubectl describe pod/mydeploy-6b4586d4bc-qlp5m (command will show you the pod information containing new pulled and deployed image)
+
+Now to upgrade a current running image>>>
+kubectl set image deploy mydeploy cognixia14=kamivibra/coginixia15:1.0 --record
+
+Now to check what is the current version of image running >>>
+kubectl rollout history mydeploy (will show you the info with revision number, through which you can rollback just in case if theres any problem with new feature)
+
+to undo update
+(go back to previous version>>>> kubectl rollout undo deploy mydeploy) 
+
+to go back to a specific revsion number>>>
+kubectl rollout deploy mydeploy --revision=(any previous number or feature number) 
+
+----------------KUBERNETES JOB FEATURE-----------------------------
+job feature is to deploy a pod whenever needed once the scheduled task of the specific pod is done, the pod will be either removed, or in not running state to save some resources.
+
+Command >>>> kubectl create job myjob --image=busybox --dry-run=client -o yaml -- sleep 20 > job.yaml
+to view or access current jobs command >>>>> watch kubectl get all
+Every 2.0s: kubectl get all                                                                                              DevOps: Mon May 24 18:44:38 2021
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   20d
+
+
+when we open the job.yaml will look like this>>>
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  creationTimestamp: null
+  name: myjob
+spec:
+  template:
+    metadata:
+      creationTimestamp: null
+    spec:
+      containers:
+      - command:
+        - sleep
+        - "20"
+        image: busybox
+        name: myjob
+        resources: {}
+      restartPolicy: Never
+status: {}
+
+Now Run this job.yaml file, command is >>>> kubectl apply -f job.yaml
+
+Now if you want to run a same pod multiple times to perform a task, you have to change some attributes in the above job.yaml file
+apiVersion: batch/v1
+kind: Job
+metadata:
+  creationTimestamp: null
+  name: myjob
+spec:
+  complettions: 5  #(ATtRIBUTE ADDED)
+  template:
+    metadata:
+      creationTimestamp: null
+    spec:
+      containers:
+      - command:
+        - sleep
+        - "10"  #(SLEEP TIMER IS REDUCED FOR QUICK DEPLOYEMENT)
+        image: busybox
+        name: myjob
+        resources: {}
+      restartPolicy: Never
+status: {}
+
+Now apply this file >>> kubectl apply -f job.yaml
+apply command to check the current jobs >>> watch kubectle get all
+
+Every 2.0s: kubectl get all                                                                                              DevOps: Mon May 24 19:00:24 2021
+
+NAME              READY   STATUS      RESTARTS   AGE
+pod/myjob-78n7w   0/1     Completed   0          26s
+pod/myjob-bkmsd   0/1     Completed   0          15s
+pod/myjob-s69pg   1/1     Running     0          3s
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   20d
+
+NAME              COMPLETIONS   DURATION   AGE
+job.batch/myjob   2/5           26s        26s
+
+NOW see the completions status, it says "2/5 means 3 are still needs gonna be perform, now after completion see the status  again.
+watch kubectl get all >>>>>
+
+Every 2.0s: kubectl get all                                                                                              DevOps: Mon May 24 19:02:33 2021
+
+NAME              READY   STATUS      RESTARTS   AGE
+pod/myjob-565lf   0/1     Completed   0          2m
+pod/myjob-78n7w   0/1     Completed   0          2m35s
+pod/myjob-bkmsd   0/1     Completed   0          2m24s
+pod/myjob-ct7nr   0/1     Completed   0          108s
+pod/myjob-s69pg   0/1     Completed   0          2m12s
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   20d
+
+NAME              COMPLETIONS   DURATION   AGE
+job.batch/myjob   5/5           59s        2m35s
+
+NOW you can see that 5 pods are successfully created!!
+check it with kubectl  get po command
+root@DevOps:/home/ubuntu/job# kubectl get po
+NAME          READY   STATUS      RESTARTS   AGE
+myjob-565lf   0/1     Completed   0          2m16s
+myjob-78n7w   0/1     Completed   0          2m51s
+myjob-bkmsd   0/1     Completed   0          2m40s
+myjob-ct7nr   0/1     Completed   0          2m4s
+myjob-s69pg   0/1     Completed   0          2m28s
+root@DevOps:/home/ubuntu/job#
+
+NOW if you would like to create 2 pods at a time we use an attribute call "parallalism". we change the attribute in job.yaml file
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  creationTimestamp: null
+  name: myjob
+spec:
+  complettions: 5  #(ATtRIBUTE ADDED)
+  parallelism: 2  #(Attribute added, it will created 2 pods at a time, and then again 2 pods at a time and finally 1 pod because in completion taks we want 5 pods in total
+  template:
+    metadata:
+      creationTimestamp: null
+    spec:
+      containers:
+      - command:
+        - sleep
+        - "10"  #(SLEEP TIMER IS REDUCED FOR QUICK DEPLOYEMENT)
+        image: busybox
+        name: myjob
+        resources: {}
+      restartPolicy: Never
+status: {}
+NOW check the status, watch kubectl get all 
+you can see that 2 pods are created and remaining will be created after 10 seconds>>>
+NAME              READY   STATUS    RESTARTS   AGE
+pod/myjob-md8xz   1/1     Running   0          9s
+pod/myjob-sf7wv   1/1     Running   0          9s
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   20d
+
+NAME              COMPLETIONS   DURATION   AGE
+job.batch/myjob   0/5           9s         9s
+
+AND down below, you can see 2 pods are more created, and 1 is being created itself,
+
+Every 2.0s: kubectl get all                                                                                              DevOps: Mon May 24 19:12:56 2021
+
+NAME              READY   STATUS      RESTARTS   AGE
+pod/myjob-c7gcs   0/1     Completed   0          16s
+pod/myjob-md8xz   0/1     Completed   0          28s
+pod/myjob-rk56c   1/1     Running     0          4s
+pod/myjob-sf7wv   0/1     Completed   0          28s
+pod/myjob-zm6qq   0/1     Completed   0          16s
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   20d
+
+NAME              COMPLETIONS   DURATION   AGE
+job.batch/myjob   4/5           28s        28s
+
+NOW finally when you view the status again, all the pods are created and the job is done,
+
+NAME              READY   STATUS      RESTARTS   AGE
+pod/myjob-c7gcs   0/1     Completed   0          2m44s
+pod/myjob-md8xz   0/1     Completed   0          2m56s
+pod/myjob-rk56c   0/1     Completed   0          2m32s
+pod/myjob-sf7wv   0/1     Completed   0          2m56s
+pod/myjob-zm6qq   0/1     Completed   0          2m44s
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   20d
+
+NAME              COMPLETIONS   DURATION   AGE
+job.batch/myjob   5/5           36s        2m56s
+
+NOW to autmote the creating of JOBs(pods) on a specific time, we use a resource called cronjob and add attributes such as "schedule" and , you can use crontab.guru in order to created a
+ schedule,
+to created cronjob resource we use following commands. (i am creating a job every minute)
+kubectl create cj mycj --image=busybox (the image name) --schedule="*/1 * * * *" --dry-run=client -o yaml -- sleep 10 > mycj.yaml
+This would be the layout of the mycj.yaml file
+
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  creationTimestamp: null
+  name: mycj
+spec:
+  jobTemplate:
+    metadata:
+      creationTimestamp: null
+      name: mycj
+    spec:
+      template:
+        metadata:
+          creationTimestamp: null
+        spec:
+          containers:
+          - command:
+            - sleep
+            - "10"
+            image: busybox
+            name: mycj
+            resources: {}
+          restartPolicy: OnFailure
+  schedule: '* * * * *'   # where all stars indicate every minute.
+status: {}
+every minute it will create a pod. apply " watch kubectl get all" command to see the status
+
+Every 2.0s: kubectl get all                                                                                              DevOps: Tue May 25 00:03:05 2021
+
+NAME                        READY   STATUS      RESTARTS   AGE
+pod/mycj-1621900800-2bh75   0/1     Completed   0          3m5s
+pod/mycj-1621900860-4hq2f   0/1     Completed   0          2m5s
+pod/mycj-1621900920-wbrv9   0/1     Completed   0          65s
+pod/mycj-1621900980-m92pw   1/1     Running     0          5s
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   21d
+
+NAME                        COMPLETIONS   DURATION   AGE
+job.batch/mycj-1621900800   1/1           12s        3m5s
+job.batch/mycj-1621900860   1/1           12s        2m5s
+job.batch/mycj-1621900920   1/1           12s        65s
+job.batch/mycj-1621900980   0/1           5s         5s
+
+NAME                 SCHEDULE    SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+cronjob.batch/mycj   * * * * *   False     1        6s              6m17s
+
+---------------------------------------------------------------------------------------------------------------------
+
+--------------------------------CONFIGMAP------------------------------------------
+Now this option is used to amend new configuraton in a running pod, We do it in 2 ways, 1st pass it as an environment variable if its only 1 or very few changes 2nd is 
+write your configurations as a file if its so many changes are to be done and then mount it as volume inside the pod..
+------settingup configMap--------
+First to see if we have any ConfigMap configurations, command >>> kubectl get cm
+
+now to setup configmap for single configuration change... command >>>> kubectl create cm mycm --from-literal=host=localhost --from-literal=pass=admin
+kubectl	get cm
+
+root@DevOps:/home/ubuntu/job# kubectl get cm
+NAME   DATA   AGE
+mycm   2      2m10s
+
+to  describe, command >>> kubectl describe cm mycm 
+
+root@DevOps:/home/ubuntu/job# kubectl describe cm mycm
+Name:         mycm
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+
+Data
+====
+host:
+----
+localhost
+pass:
+----
+admin
+Events:  <none>
+Now for multiple configurations changes we make a file with any extension, eg .ini .txt etc...
+
+root@DevOps:/home/ubuntu/job# vi myconfig.ini
+root@DevOps:/home/ubuntu/job# ls
+job.yaml  mycj.yaml  mycj1.yaml  myconfig.ini
+
+Now run this file as a configmap
+root@DevOps:/home/ubuntu/job# kubectl create cm mycm1 --from-file=myconfig.ini
+configmap/mycm1 created
+root@DevOps:/home/ubuntu/job# kubectl get cm
+NAME    DATA   AGE
+mycm    2      20m
+mycm1   1      5s
+
+to check the contents of newly created configfile, mycm1>>>
+root@DevOps:/home/ubuntu/job# kubectl describe cm mycm1
+Name:         mycm1
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+
+Data
+====
+myconfig.ini:
+----
+
+# adding configurations to file
+
+state=california
+city=San Jose
+County=Santa Clara
+Country=USA
+
+Events:  <none>
+..................
+Now how we can use these file inside a pod.....
+first we create a pod, with (required image) here we make an ngnix pod for example,
+root@DevOps:/home/ubuntu/job# kubectl run nginx --image=nginx --dry-run=client -o yaml > pod.yaml
+now as we mentioned there are 2 ways to configure configmap, First is passing configmap as an ENV varialbe and 2nd is creating a file and then attaching it to a pod as a 
+volume, so first lets configure it as passing ENV varialbe..... vi the myconfig.ini file and add the ENV attribute,
+vi myconfig.ini
+
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}
+
+Now we will insert 2 ENV varibles, under specs.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    env:			#inserting ENV Variables 
+       - name: MYHOST           # variable 1
+         valueFrom:
+           configMapKeyRef:
+             name: mycm
+             key: host
+       - name: MYPASS           # 2nd Variable		
+         valueFrom:
+           configMapKeyRef:
+             name: mycm
+             key: pass
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}
+
+Now run the file....
+root@DevOps:/home/ubuntu/job# kubectl apply -f pod.yaml
+pod/nginx created
+root@DevOps:/home/ubuntu/job# kubectl get po
+NAME    READY   STATUS              RESTARTS   AGE
+nginx   0/1     ContainerCreating   0          4s
+root@DevOps:/home/ubuntu/job# kubectl get po
+NAME    READY   STATUS    RESTARTS   AGE
+nginx   1/1     Running   0          6s
+
+Now you can see the POD is running, now login inside the pod....
+
+root@DevOps:/home/ubuntu/job# kubectl exec -it nginx bash
+kubectl exec [POD] [COMMAND] is DEPRECATED and will be removed in a future version. Use kubectl exec [POD] -- [COMMAND] instead.
+#run the command to check the ENV we configured,
+
+root@nginx:/# env
+KUBERNETES_SERVICE_PORT_HTTPS=443
+KUBERNETES_SERVICE_PORT=443
+MYHOST=localhost    #the values when we were creating it --from-literal option.
+HOSTNAME=nginx
+PWD=/
+PKG_RELEASE=1~buster
+HOME=/root
+KUBERNETES_PORT_443_TCP=tcp://10.96.0.1:443
+NJS_VERSION=0.5.3
+TERM=xterm
+SHLVL=1
+MYPASS=admin      #the values when we were creating it --from-literal option.
+KUBERNETES_PORT_443_TCP_PROTO=tcp
+KUBERNETES_PORT_443_TCP_ADDR=10.96.0.1
+KUBERNETES_SERVICE_HOST=10.96.0.1
+KUBERNETES_PORT=tcp://10.96.0.1:443
+KUBERNETES_PORT_443_TCP_PORT=443
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+NGINX_VERSION=1.21.0
+_=/usr/bin/env
+
+(JUST FOR INFO, if you want to know what attributes we can use, you can use the command... kubectle explain po.spec.containers and hit enter, will show you all the usable
+attributes and its descriptions. it will show you a long list but i added only the varibles i used in above example, ENV...
+
+root@DevOps:/home/ubuntu/job# kubectl explain po.spec.containers
+KIND:     Pod
+VERSION:  v1
+
+RESOURCE: containers <[]Object>
+
+DESCRIPTION:
+     List of containers belonging to the pod. Containers cannot currently be
+     added or removed. There must be at least one container in a Pod. Cannot be
+     updated
+
+   env  <[]Object>
+     List of environment variables to set in the container. Cannot be updated.
+
+   envFrom      <[]Object>
+     List of sources to populate environment variables in the container. The
+     keys defined within a source must be a C_IDENTIFIER. All invalid keys will
+     be reported as an event when the container is starting. When a key exists
+     in multiple sources, the value associated with the last source will take
+     precedence. Values defined by an Env with a duplicate key will take
+     precedence. Cannot be updated.
+
+   image        <string>
+     Docker image name. More info:
+     https://kubernetes.io/docs/concepts/containers/images This field is
+     optional to allow higher level config management to default or override
+     container images in workload controllers like Deployments and StatefulSets.
+
+   imagePullPolicy      <string>
+     Image pull policy. One of Always, Never, IfNotPresent. Defaults to Always
+     if :latest tag is specified, or IfNotPresent otherwise. Cannot be updated.
+     More info:
+     https://kubernetes.io/docs/concepts/containers/images#updating-images
+
+                              ETC.....
+NOW 2nd method to create a volume and attach it to the pod as a volume, now in the previous file which is...
+
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}
+
+we will add volume attributes and then mount it to the pod in the same file we will add MOUNT attribute under CONTAINER option
+
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    volumeMounts:			#ADDED ATTRIBUTE
+       - name: myvol			#ADDED ATTRIBUTE	
+         mountPath: /etc/myconfigmap	#ADDED ATTRIBUTE
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+  volumes:				#ADDED ATTRIBUTE
+    - name: myvol			#ADDED ATTRIBUTE
+      configMap:			#ADDED ATTRIBUTE	
+         name: mycm1			#ADDED ATTRIBUTE
+status: {}
+And then we will run the file to create pod, while creating pod, it will create a volume name myvol and will mount it to directory name myconfigmap inside /etc folder,
+
+root@DevOps:/home/ubuntu/job# kubectl apply -f pod1.yaml
+pod/nginx created
+root@DevOps:/home/ubuntu/job# kubectl get po
+NAME    READY   STATUS    RESTARTS   AGE
+nginx   1/1     Running   0          3s
+root@DevOps:/home/ubuntu/job#
+
+login to the pod and confirm the volume and its mount path!
+run the command... "mount" and confirm the mounth path
+
+/dev/root on /etc/myconfigmap type ext4 (ro,relatime,discard)  			#Mounted Path/direcotry.
+/dev/root on /etc/hosts type ext4 (rw,relatime,discard)
+/dev/root on /dev/termination-log type ext4 (rw,relatime,discard)
+/dev/root on /etc/hostname type ext4 (rw,relatime,discard)
+
+now go to the folder and you will find the myconfig.ini file there
+
+root@nginx:/# cd /etc/myconfigmap/
+root@nginx:/etc/myconfigmap# ls
+myconfig.ini
+root@nginx:/etc/myconfigmap# cat myconfig.ini
+
+# adding configurations to file
+
+state=california
+city=San Jose
+County=Santa Clara
+Country=USA
+root@nginx:/etc/myconfigmap#
+--------------------------------------------------------------------------------------------
+
+PV and PVC . (Persistent Volume, and Persistent Volume Claim)
+is used to store the data of an application running on a pod, even the pod gets deleted, PV is to define by admin for example there are 3 PVs(PV1 is 4GB, PV2 is5GB, 
+PV3 is2GB), and PV is cluster wide creation and PVC is the required amount of disk space by the POD or application, now for example, our PVC1 is 3GB, it will look in the 
+entire cluster and try to match a PV for same exact PVC requirement or can be a lil bit higher, in this case, for 3GB PVC1, it will map PV1 which is 4GB, and is close to
+3GB. in other words it will map PV1 to PVC1.
+so lets create first PV... 
+
+vi pv.yaml  #and insert the following to create a PV
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+    name: mypv
+spec:
+   accessModes:
+       - ReadWriteMany
+   storageClassName: normal
+   capacity:
+         storage: 1G
+   hostPath:
+      path: /opt
+
+run this file,
+root@DevOps:/home/ubuntu/volume# kubectl apply -f pv.yaml
+persistentvolume/mypv created
+root@DevOps:/home/ubuntu/volume# kubectl get pv
+NAME   CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+mypv   1G         RWX            Retain           Available           normal                  4s
+
+And its not yet bounded to any PVC, now create mypvc.yaml file in order to bind it to mypv
+
+root@DevOps:/home/ubuntu/volume# vi mypvc.yaml
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mypvc
+spec:
+  storageClassName: normal
+  resources:
+    requests:
+      storage: 1G
+  accessModes:
+    - ReadWriteMany
+
+in the file above, only difference between the above PV and this PVC is the path to volume isnt shown and the name is different because we are creating a PVC for PV.
+root@DevOps:/home/ubuntu/volume# ls
+mypvc.yaml  pv.yaml
+root@DevOps:/home/ubuntu/volume# kubectl apply -f mypvc.yaml
+persistentvolumeclaim/mypvc created
+root@DevOps:/home/ubuntu/volume# kubectl get pvc
+NAME    STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+mypvc   Bound    mypv     1G         RWX            normal         7s
+
+# Now you can clearly see above that this PVC bounded to mypv volume, 
+and now check the status of pv
+
+root@DevOps:/home/ubuntu/volume# kubectl get pv
+NAME   CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM           STORAGECLASS   REASON   AGE
+mypv   1G         RWX            Retain           Bound    default/mypvc   normal                  4m44s
+# and this PV is bounded to mypvc.
+Now lets create the pod.yaml file with the following attributes
+kubectl run ngnix --image=nginx --dry-run=client -o yaml > pod.yaml
+then
+vi pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    resources: {}
+    volumeMounts:
+       - name: myvol
+         mountPath: /etc/foo
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+  volumes:
+    - name: myvol
+      persistentVolumeClaim:
+              claimName: mypvc
+status: {}
+
+----------------------------------------------------
+Helm Chart
+
+Helm Charts are simply Kubernetes YAML manifests combined into a single package that can be advertised to your Kubernetes clusters. Once packaged, installing a Helm Chart
+into your cluster is as easy as running a single helm install, which really simplifies the deployment of containerized applications
+the hierarchal tree view of the helm chart....
+
+root@DevOps:/home/ubuntu/helm/myapp# tree
+.
+├── Chart.yaml
+├── charts
+├── templates
+│   └── deploy.yaml
+└── values.yaml
+We import the deploy.yaml file, which contains our microservice manifest. and the Values.yaml file contains the values which will be ammended automaticaly into deploy.yaml
+manifst. 
+
+root@DevOps:/home/ubuntu/helm/myapp# cat templates/deploy.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: {{.Values.myapp.appname}}
+  name: {{.Values.myapp.appname}}
+spec:
+  replicas: {{.Values.myapp.replicas}}
+  selector:
+    matchLabels:
+      app: {{.Values.myapp.appname}}
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: {{.Values.myapp.appname}}
+    spec:
+      containers:
+      - image: {{.Values.myapp.image}}
+        name: {{.Values.myapp.appname}}
+        resources: {}
+status: {}
+And  inside the values.yaml file we define the values which will be feeded into deploy.yaml.
+
+myapp:
+   appname: myapp
+   replicas: 5
+   image: kamivibra/cognixia14:1.0
+
+now to run helm chart, simply type the command....
+root@DevOps:/home/ubuntu/helm# helm install myapp myapp/ --values myapp/values.yaml (it will result automatically the following output.)
+
+NAME: myapp
+LAST DEPLOYED: Tue Jun  8 22:58:53 2021
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+THEN the pods will be created, in that values.yaml file we defined 5 replicas of same microservice, there are 5 pods running of the same microservices.
+root@DevOps:/home/ubuntu/helm# kubectl get po
+NAME                     READY   STATUS    RESTARTS   AGE
+myapp-7d67f985d4-2bkx2   1/1     Running   0          87s
+myapp-7d67f985d4-cjcqz   1/1     Running   0          87s
+myapp-7d67f985d4-fdjl9   1/1     Running   0          87s
+myapp-7d67f985d4-hhzhm   1/1     Running   0          87s
+myapp-7d67f985d4-rdm82   1/1     Running   0          87s
+
+NOW to check which application is deployed or running.. command... 
+root@DevOps:/home/ubuntu/helm# helm list
+NAME    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART           APP VERSION
+myapp   default         1               2021-06-08 22:58:53.069771619 +0000 UTC deployed        myapp-0.1.0     1.16.0
+
+Now to remove the deployed app.. command
+root@DevOps:/home/ubuntu/helm# helm uninstall myapp
+release "myapp" uninstalled
+root@DevOps:/home/ubuntu/helm# kubectl get po
+NAME                     READY   STATUS        RESTARTS   AGE
+myapp-7d67f985d4-2bkx2   0/1     Terminating   0          59m
+myapp-7d67f985d4-cjcqz   0/1     Terminating   0          59m
+myapp-7d67f985d4-fdjl9   0/1     Terminating   0          59m
+myapp-7d67f985d4-rdm82   0/1     Terminating   0          59m
+root@DevOps:/home/ubuntu/helm#
+now you can clearly see, no application is running after unistall the helm chart
+
+root@DevOps:/home/ubuntu/helm# helm list
+NAME    NAMESPACE       REVISION        UPDATED STATUS  CHART   APP VERSION
+root@DevOps:/home/ubuntu/helm#
+
+
+
+
+
+
+
+
+
+
+
+
+
